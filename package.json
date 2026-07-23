@@ -1,0 +1,17 @@
+{
+  "name": "asl-customer-api",
+  "version": "1.0.0",
+  "description": "Firebase-backed customer/dealer lookup API for Webex CC / Webex Connect flows",
+  "main": "index.js",
+  "scripts": {
+    "generate-data": "node scripts/generate-data.js",
+    "seed": "node scripts/seed-firestore.js"
+      },
+  "dependencies": {
+    "firebase-admin": "^14.2.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "vercel": "^37.4.0"
+  }
+}
