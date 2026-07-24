@@ -1,6 +1,6 @@
 const { requireApiKey } = require('../../lib/auth');
 const { lookupAllAccountsByMobile, normalizeDob } = require('../../lib/lookupCustomer');
-const { withFormattedDob } = require('../../lib/formatDob');
+const { formatAccountForResponse } = require('../../lib/formatAccount');
 
 /**
  * POST /api/dob/validate
@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     if (!match) {
       return res.status(200).json({ success: true, valid: false, reason: 'dob_mismatch' });
     }
-    return res.status(200).json({ success: true, valid: true, customer: withFormattedDob(match) });
+    return res.status(200).json({ success: true, valid: true, customer: formatAccountForResponse(match) });
   } catch (err) {
     console.error('dob validate error:', err);
     return res.status(500).json({ success: false, error: 'Internal server error' });

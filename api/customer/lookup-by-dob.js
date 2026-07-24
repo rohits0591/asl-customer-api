@@ -1,6 +1,6 @@
 const { requireApiKey } = require('../../lib/auth');
 const { lookupAccountsByRegisteredNumberAndDob } = require('../../lib/lookupCustomer');
-const { withFormattedDobList } = require('../../lib/formatDob');
+const { formatAccountListForResponse } = require('../../lib/formatAccount');
 
 /**
  * POST /api/customer/lookup-by-dob
@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
 
   try {
     const rawAccounts = await lookupAccountsByRegisteredNumberAndDob(mobile, dob);
-    const accounts = withFormattedDobList(rawAccounts);
+    const accounts = formatAccountListForResponse(rawAccounts);
     return res.status(200).json({
       success: true,
       found: accounts.length > 0,

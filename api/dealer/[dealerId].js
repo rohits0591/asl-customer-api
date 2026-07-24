@@ -1,6 +1,6 @@
 const { requireApiKey } = require('../../lib/auth');
 const { db } = require('../../lib/firebase');
-const { withFormattedDob } = require('../../lib/formatDob');
+const { formatAccountForResponse } = require('../../lib/formatAccount');
 
 /**
  * GET /api/dealer/475101
@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     if (snap.empty) {
       return res.status(200).json({ success: true, found: false });
     }
-    return res.status(200).json({ success: true, found: true, dealer: withFormattedDob(snap.docs[0].data()) });
+    return res.status(200).json({ success: true, found: true, dealer: formatAccountForResponse(snap.docs[0].data()) });
   } catch (err) {
     console.error('dealer lookup error:', err);
     return res.status(500).json({ success: false, error: 'Internal server error' });

@@ -30,7 +30,7 @@ asl-customer-api/
 │   ├── lookupCustomer.js        Mobile-number normalization + Firestore queries
 │   ├── auth.js                  x-api-key header check
 │   ├── tpin.js                  4-digit format check (storage integrity only)
-│   └── formatDob.js             Reformats DOB to DDMMYYYY at the response layer (stored internally as YYYY-MM-DD)
+│   └── formatAccount.js         Sanitizes field names with spaces to underscores + reformats DOB to DDMMYYYY, at the response layer only
 ├── scripts/
 │   ├── generate-data.js         Regenerates the 100 sample records
 │   └── seed-firestore.js        Pushes data/*.json into Firestore
@@ -51,7 +51,14 @@ RM_ID, DOB, CS_UGC/PBRG/BRG, gc, critical_customer, etc.)
 > **DOB format:** stored internally as `YYYY-MM-DD` (needed for the equality
 > matching in `lib/lookupCustomer.js`), but every API response reformats it to
 > `DDMMYYYY` before sending it back — matching the format the flow prompts the
-> caller for. See `lib/formatDob.js`.
+> caller for. See `lib/formatAccount.js`.
+>
+> **Field-name format:** a few source columns have spaces in their names
+> (`C1 Number`, `C2 Number`, `Extension of Primary RM`, `Extension of Secondary RM`).
+> Webex Connect's Pebble expressions can't address a key containing a space, so
+> every response rewrites these to underscores instead — `C1_Number`,
+> `C2_Number`, `Extension_of_Primary_RM`, `Extension_of_Secondary_RM`. This is
+> also response-layer only; Firestore still stores the original column names.
 
 **Collection `tpins`** — doc id = `Customer_ANI` (mobile number, no `+`, e.g.
 `919167371528`) — field `TPIN`.

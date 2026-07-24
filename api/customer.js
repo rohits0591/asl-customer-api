@@ -1,6 +1,6 @@
 const { requireApiKey } = require('../lib/auth');
 const { lookupAllAccountsByMobile } = require('../lib/lookupCustomer');
-const { withFormattedDobList } = require('../lib/formatDob');
+const { formatAccountListForResponse } = require('../lib/formatAccount');
 
 /**
  * GET /api/customer?mobile=919167371528
@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     if (rawAccounts.length === 0) {
       return res.status(200).json({ success: true, found: false, count: 0, type: 'none', accounts: [] });
     }
-    const accounts = withFormattedDobList(rawAccounts);
+    const accounts = formatAccountListForResponse(rawAccounts);
     const type = accounts.length === 1 ? 'single' : 'multiple';
     return res.status(200).json({
       success: true,
