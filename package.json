@@ -6,7 +6,7 @@
   "scripts": {
     "generate-data": "node scripts/generate-data.js",
     "seed": "node scripts/seed-firestore.js"
-      },
+  },
   "dependencies": {
     "firebase-admin": "^14.2.0",
     "dotenv": "^16.4.5"

@@ -1,5 +1,6 @@
 const { requireApiKey } = require('../../lib/auth');
-const { lookupAllAccountsByMobile } = require('../../lib/lookupCustomer');
+const { lookupAllAccountsByMobile, normalizeDob } = require('../../lib/lookupCustomer');
+const { withFormattedDob } = require('../../lib/formatDob');
 
 /**
  * POST /api/dob/validate
@@ -27,14 +28,7 @@ module.exports = async (req, res) => {
     return res.status(400).json({ success: false, error: 'mobile and dob are required' });
   }
 
-  // Accept DDMMYYYY (as prompted in the flow) or ISO YYYY-MM-DD.
-  let normalizedDob = String(dob);
-  if (/^\d{8}$/.test(normalizedDob)) {
-    const dd = normalizedDob.slice(0, 2);
-    const mm = normalizedDob.slice(2, 4);
-    const yyyy = normalizedDob.slice(4, 8);
-    normalizedDob = `${yyyy}-${mm}-${dd}`;
-  }
+  const normalizedDob = normalizeDob(dob);
 
   try {
     const accounts = await lookupAllAccountsByMobile(mobile);
@@ -48,7 +42,7 @@ module.exports = async (req, res) => {
     if (!match) {
       return res.status(200).json({ success: true, valid: false, reason: 'dob_mismatch' });
     }
-    return res.status(200).json({ success: true, valid: true, customer: match });
+    return res.status(200).json({ success: true, valid: true, customer: withFormattedDob(match) });
   } catch (err) {
     console.error('dob validate error:', err);
     return res.status(500).json({ success: false, error: 'Internal server error' });

@@ -23,12 +23,14 @@ asl-customer-api/
 │   ├── dealer/[dealerId].js          GET  /api/dealer/475101
 │   ├── tpin.js                       GET/POST /api/tpin  (fetch or store the TPIN value)
 │   ├── dob/validate.js               POST /api/dob/validate
-│   └── verify.js                     POST /api/verify  (combined 3-factor check — see note below)
+│   ├── verify.js                     POST /api/verify  (combined 3-factor check — see note below)
+│   └── customer/lookup-by-dob.js     POST /api/customer/lookup-by-dob
 ├── lib/
 │   ├── firebase.js              Firebase Admin init (from env vars)
 │   ├── lookupCustomer.js        Mobile-number normalization + Firestore queries
 │   ├── auth.js                  x-api-key header check
-│   └── tpin.js                  4-digit format check (storage integrity only)
+│   ├── tpin.js                  4-digit format check (storage integrity only)
+│   └── formatDob.js             Reformats DOB to DDMMYYYY at the response layer (stored internally as YYYY-MM-DD)
 ├── scripts/
 │   ├── generate-data.js         Regenerates the 100 sample records
 │   └── seed-firestore.js        Pushes data/*.json into Firestore
@@ -45,6 +47,11 @@ asl-customer-api/
 **Collection `clients`** — doc id = `ENTITY_ID` — all 27 columns from
 `Client_dealer_mapping.xlsx` (ENTITY_NAME, ENT_MOBILE_NO, DEALER_ID, BRANCH_ID,
 RM_ID, DOB, CS_UGC/PBRG/BRG, gc, critical_customer, etc.)
+
+> **DOB format:** stored internally as `YYYY-MM-DD` (needed for the equality
+> matching in `lib/lookupCustomer.js`), but every API response reformats it to
+> `DDMMYYYY` before sending it back — matching the format the flow prompts the
+> caller for. See `lib/formatDob.js`.
 
 **Collection `tpins`** — doc id = `Customer_ANI` (mobile number, no `+`, e.g.
 `919167371528`) — field `TPIN`.
@@ -111,6 +118,7 @@ flow steps need:
 | "Do you wish to Reset TPIN?" → Reset TPIN flow (trigger temp TPIN, validate, choose new, same-as-old / repetitive-digit checks, confirm) | Entirely in-flow — Webex Connect holds the temp TPIN / new-TPIN candidate as flow/session variables across the nodes of a single call. Once the customer confirms the new TPIN, the flow calls `POST /api/tpin` to persist it |
 | Check SINGLE or MULTIPLE accounts for the same number | `GET /api/customer/accounts?mobile=` (`type` = `single` / `multiple` / `none`) |
 | Prompt: enter DOB (DDMMYYYY) → Check valid input? | `POST /api/dob/validate` (accepts `DDMMYYYY` or `YYYY-MM-DD`; pass `entityId` once an account is chosen on the multiple-accounts branch) |
+| Retrieve account by registered number + DOB (any step needing to identify the account holder directly, e.g. a self-service lookup outside the AR path) | `POST /api/customer/lookup-by-dob` — matches `ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `C1 Number`, `C2 Number` **only** (excludes `AR_MOBILE_NUMBER`, since this identifies the account holder, not a representative) |
 | Check mapped/unmapped → Transfer to mapped dealer / CnT queue | Use the `customer`/`accounts` response's `DEALER_ID`: truthy → mapped, transfer using `DEALER_NAME`/`DEALER_EMAIL_ID`/`BRANCH_ID`; blank → unmapped → route to CnT queue. No separate endpoint needed. |
 | Standard error flow (shared sub-flow) | Implemented natively in Webex Connect/WxCC as a reusable error sub-flow |
 
@@ -128,10 +136,11 @@ Quick uptime check, no auth required.
 
 ### GET /api/customer?mobile=919167371528
 Looks up every client record linked to the number by matching it against
-`ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, **and** `AR_MOBILE_NUMBER` — so a number
-registered only as an Authorized Representative on one or more accounts still
-returns all of them. Accepts the number in any common format (`9167371528`,
-`919167371528`, `+919167371528`).
+`ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `AR_MOBILE_NUMBER`, `C1 Number`, and
+`C2 Number` — so a number registered only as an Authorized Representative, or
+only as a landline contact, still returns every account it's linked to.
+Accepts the number in any common format (`9167371528`, `919167371528`,
+`+919167371528`).
 ```json
 {
   "success": true,
@@ -151,9 +160,10 @@ directly on this same call instead of needing a second request.
 Direct lookup by `ENTITY_ID`.
 
 ### GET /api/customer/accounts?mobile=919167371528
-Same underlying lookup as `GET /api/customer` above (all three mobile fields,
-including `AR_MOBILE_NUMBER`) — kept as a separate path for flows already
-wired to call it explicitly for the single-vs-multiple check.
+Same underlying lookup as `GET /api/customer` above (all five contact
+fields — `ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `AR_MOBILE_NUMBER`, `C1 Number`,
+`C2 Number`) — kept as a separate path for flows already wired to call it
+explicitly for the single-vs-multiple check.
 ```json
 { "success": true, "count": 2, "type": "multiple", "accounts": [ { "ENTITY_ID": 1, "...": "..." }, { "ENTITY_ID": 2, "...": "..." } ] }
 ```
@@ -181,6 +191,17 @@ reset. Only checks that the value is exactly 4 digits; all business rules
 Body: `{ "mobile": "919167371528", "dob": "15031990", "entityId": "15329478" }` (`entityId` optional).
 Accepts DOB as `DDMMYYYY` (as prompted in the flow) or `YYYY-MM-DD`. Returns
 `{ valid: true, customer: {...} }` or `{ valid: false, reason: "no_account_found" | "dob_mismatch" }`.
+Matches against all five contact fields (including `AR_MOBILE_NUMBER`).
+
+### POST /api/customer/lookup-by-dob
+Body: `{ "mobile": "919167371528", "dob": "15031990" }` (accepts `DDMMYYYY` or `YYYY-MM-DD`).
+Retrieves account(s) by matching the number **and** DOB together, against
+`ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `C1 Number`, and `C2 Number` only —
+`AR_MOBILE_NUMBER` is deliberately excluded, since this endpoint identifies the
+account holder directly rather than someone calling on their behalf.
+```json
+{ "success": true, "found": true, "count": 1, "accounts": [ { "ENTITY_ID": 15329478, "...": "..." } ] }
+```
 
 ### POST /api/verify
 Body: `{ "mobile": "919167371528", "dob": "1990-01-30", "tpin": "1234" }`
@@ -208,6 +229,7 @@ Use a **"Send API Request" / HTTP Request** node:
 ## 8. Notes / next steps
 - The 100 records are **synthetic** — swap in your real export (same column names) before go-live, then re-run `npm run seed`.
 - `Client_dealer_mapping.xlsx` has no customer-email column (only `DEALER_EMAIL_ID`, which is the dealer's own email) — irrelevant now that the flow handles TPIN send itself, but worth knowing if any other step needs to email the customer.
+- **Landline number format caveat:** `normalizeToPlus91()` assumes a 10-digit national number before adding the `91` prefix. The synthetic `C1 Number`/`C2 Number` sample data follows that same 10-digit pattern (STD code + subscriber number), so lookups work correctly against it. Real Indian landline numbers can vary in total length depending on the STD code, so if your actual export has shorter/longer landline numbers, double-check a few real records match correctly after seeding — you may need to adjust `normalizeToPlus91()` if the format differs.
 - Add Firestore composite indexes if you later query on combinations of fields (single-field equality queries used here don't need one).
 - Consider Firestore security rules restricting direct client-side reads, since all access here goes through the Admin SDK on the server side only.
 - Since `/api/tpin` (GET) returns the TPIN in plaintext to be compared in-flow, make sure the `x-api-key` is treated as a real secret (Vercel env var, not hardcoded in the flow's visible config) and consider IP-allowlisting the Vercel function to Webex Connect's egress ranges if that's supported in your setup.
