@@ -118,7 +118,7 @@ flow steps need:
 | "Do you wish to Reset TPIN?" → Reset TPIN flow (trigger temp TPIN, validate, choose new, same-as-old / repetitive-digit checks, confirm) | Entirely in-flow — Webex Connect holds the temp TPIN / new-TPIN candidate as flow/session variables across the nodes of a single call. Once the customer confirms the new TPIN, the flow calls `POST /api/tpin` to persist it |
 | Check SINGLE or MULTIPLE accounts for the same number | `GET /api/customer/accounts?mobile=` (`type` = `single` / `multiple` / `none`) |
 | Prompt: enter DOB (DDMMYYYY) → Check valid input? | `POST /api/dob/validate` (accepts `DDMMYYYY` or `YYYY-MM-DD`; pass `entityId` once an account is chosen on the multiple-accounts branch) |
-| Retrieve account by registered number + DOB (any step needing to identify the account holder directly, e.g. a self-service lookup outside the AR path) | `POST /api/customer/lookup-by-dob` — matches `ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `C1 Number`, `C2 Number` **only** (excludes `AR_MOBILE_NUMBER`, since this identifies the account holder, not a representative) |
+| Retrieve account by number + DOB (any step needing to identify an account via both factors together) | `POST /api/customer/lookup-by-dob` — matches all five contact fields (`ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `AR_MOBILE_NUMBER`, `C1 Number`, `C2 Number`) |
 | Check mapped/unmapped → Transfer to mapped dealer / CnT queue | Use the `customer`/`accounts` response's `DEALER_ID`: truthy → mapped, transfer using `DEALER_NAME`/`DEALER_EMAIL_ID`/`BRANCH_ID`; blank → unmapped → route to CnT queue. No separate endpoint needed. |
 | Standard error flow (shared sub-flow) | Implemented natively in Webex Connect/WxCC as a reusable error sub-flow |
 
@@ -195,10 +195,10 @@ Matches against all five contact fields (including `AR_MOBILE_NUMBER`).
 
 ### POST /api/customer/lookup-by-dob
 Body: `{ "mobile": "919167371528", "dob": "15031990" }` (accepts `DDMMYYYY` or `YYYY-MM-DD`).
-Retrieves account(s) by matching the number **and** DOB together, against
-`ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `C1 Number`, and `C2 Number` only —
-`AR_MOBILE_NUMBER` is deliberately excluded, since this endpoint identifies the
-account holder directly rather than someone calling on their behalf.
+Retrieves account(s) by matching the number **and** DOB together, against all
+five contact fields — `ENT_MOBILE_NO`, `ENT_MOBILE_NO_2`, `AR_MOBILE_NUMBER`,
+`C1 Number`, `C2 Number` — same field set as `GET /api/customer`, but requires
+DOB to also match.
 ```json
 { "success": true, "found": true, "count": 1, "accounts": [ { "ENTITY_ID": 15329478, "...": "..." } ] }
 ```

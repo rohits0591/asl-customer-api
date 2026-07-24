@@ -6,11 +6,9 @@ const { withFormattedDobList } = require('../../lib/formatDob');
  * POST /api/customer/lookup-by-dob
  * Body: { "mobile": "919167371528", "dob": "15031990" | "1990-03-15" }
  *
- * Retrieves account(s) by matching BOTH the registered number AND the DOB
- * together. The number is checked against ENT_MOBILE_NO, ENT_MOBILE_NO_2,
- * C1 Number, and C2 Number ONLY — AR_MOBILE_NUMBER is deliberately excluded,
- * since this endpoint identifies the account HOLDER via their own number,
- * not an Authorized Representative's.
+ * Retrieves account(s) by matching BOTH the number AND the DOB together. The
+ * number is checked against all five contact fields - ENT_MOBILE_NO,
+ * ENT_MOBILE_NO_2, AR_MOBILE_NUMBER, C1 Number, and C2 Number.
  *
  * Response:
  *   { success: true, found: true,  count: 1, accounts: [ {...} ] }
